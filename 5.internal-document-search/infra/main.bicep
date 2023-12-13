@@ -56,9 +56,9 @@ param cosmosDbDatabaseName string = 'ChatHistory'
 param cosmosDbContainerName string = 'Prompts'
 
 
-
-param vnetLocation string = location
-param vnetAddressPrefix string = '10.0.0.0/16'
+param virtualNetworkName string = 'vnet'
+// param vnetLocation string = location
+// param vnetAddressPrefix string = '10.0.0.0/16'
 
 param subnetAddressPrefix1 string = '10.0.0.0/24'
 param subnetAddressPrefix2 string = '10.0.1.0/24'
@@ -340,13 +340,22 @@ module nic 'core/network/nic.bicep' = {
   ]
 }
 
+// module vnet 'core/network/vnet.bicep' = {
+//   name: 'vnet'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vnet'
+//     location: vnetLocation
+//     addressPrefixes: [vnetAddressPrefix]
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+// }
+
 module vnet 'core/network/vnet.bicep' = {
-  name: 'vnet'
+  name: virtualNetworkName
   scope: resourceGroup
   params: {
-    name: 'vnet'
-    location: vnetLocation
-    addressPrefixes: [vnetAddressPrefix]
+    name: virtualNetworkName
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
   }
 }
