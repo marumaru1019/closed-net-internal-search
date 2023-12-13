@@ -61,14 +61,14 @@ param virtualNetworkName string = 'vnet'
 // param vnetAddressPrefix string = '10.0.0.0/16'
 
 param subnetAddressPrefix1 string = '10.0.0.0/24'
-param subnetAddressPrefix2 string = '10.0.1.0/24'
+// param subnetAddressPrefix2 string = '10.0.1.0/24'
 param subnetAddressPrefix3 string = '10.0.2.0/24'
 
 param privateEndpointLocation string = location
 
-param vmLoginName string = 'azureuser'
-@secure()
-param vmLoginPassword string
+// param vmLoginName string = 'azureuser'
+// @secure()
+// param vmLoginPassword string
 
 
 @description('Id of the user or app to assign application roles')
@@ -164,6 +164,7 @@ module backend 'core/host/appservice.bicep' = {
     managedIdentity: true
     applicationInsightsName: useApplicationInsights ? monitoring.outputs.applicationInsightsName : ''
     virtualNetworkSubnetId: isPrivateNetworkEnabled ? appServiceSubnet.outputs.id : ''
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     appSettings: {
       APPLICATIONINSIGHTS_CONNECTION_STRING: useApplicationInsights ? monitoring.outputs.applicationInsightsConnectionString : ''
       AZURE_STORAGE_ACCOUNT: storage.outputs.name
@@ -203,7 +204,7 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         }
         sku: {
           name: 'Standard'
-          capacity: 120
+          capacity: 20
         }
       }
       {
@@ -215,7 +216,7 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         }
         sku: {
           name: 'Standard'
-          capacity: 120
+          capacity: 20
         }
       }
     ]
@@ -230,6 +231,7 @@ module formRecognizer 'core/ai/cognitiveservices.bicep' = {
     name: !empty(formRecognizerServiceName) ? formRecognizerServiceName : '${abbrs.cognitiveServicesFormRecognizer}${resourceToken}'
     kind: 'FormRecognizer'
     location: formRecognizerResourceGroupLocation
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     tags: tags
     sku: {
       name: formRecognizerSkuName
@@ -244,6 +246,7 @@ module searchService 'core/search/search-services.bicep' = {
     name: !empty(searchServiceName) ? searchServiceName : 'gptkb-${resourceToken}'
     location: searchServiceResourceGroupLocation
     tags: tags
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     authOptions: {
       aadOrApiKey: {
         aadAuthFailureMode: 'http401WithBearerChallenge'
@@ -276,41 +279,42 @@ module storage 'core/storage/storage-account.bicep' = {
         publicAccess: 'None'
       }
     ]
-    publicNetworkAccess: 'Enabled'
+    // publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
   }
 }
 
 // ================================================================================================
 // PRIVATE NETWORK VM
 // ================================================================================================
-module vm 'core/vm/vm.bicep' = {
-  name: 'vm${resourceToken}'
-  scope: resourceGroup
-  params: {
-    name: 'vm${resourceToken}'
-    location: location
-    adminUsername: vmLoginName
-    adminPasswordOrKey: vmLoginPassword
-    nicId: nic.outputs.nicId
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    nic
-  ]
-}
+// module vm 'core/vm/vm.bicep' = {
+//   name: 'vm${resourceToken}'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vm${resourceToken}'
+//     location: location
+//     adminUsername: vmLoginName
+//     adminPasswordOrKey: vmLoginPassword
+//     nicId: nic.outputs.nicId
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     nic
+//   ]
+// }
 
 // ================================================================================================
 // NETWORK
 // ================================================================================================
-module publicIP 'core/network/pip.bicep' = {
-  name: 'publicIP'
-  scope: resourceGroup
-  params: {
-    name: 'publicIP'
-    location: location
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-}
+// module publicIP 'core/network/pip.bicep' = {
+//   name: 'publicIP'
+//   scope: resourceGroup
+//   params: {
+//     name: 'publicIP'
+//     location: location
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+// }
 
 module nsg 'core/network/nsg.bicep' = {
   name: 'nsg'
@@ -322,23 +326,23 @@ module nsg 'core/network/nsg.bicep' = {
   }
 }
 
-module nic 'core/network/nic.bicep' = {
-  name: 'vm-nic'
-  scope: resourceGroup
-  params: {
-    name: 'vm-nic'
-    location: location
-    subnetId: vmSubnet.outputs.id
-    publicIPId: publicIP.outputs.publicIPId
-    nsgId: nsg.outputs.id
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    vmSubnet
-    publicIP
-    nsg
-  ]
-}
+// module nic 'core/network/nic.bicep' = {
+//   name: 'vm-nic'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vm-nic'
+//     location: location
+//     subnetId: vmSubnet.outputs.id
+//     publicIPId: publicIP.outputs.publicIPId
+//     nsgId: nsg.outputs.id
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     vmSubnet
+//     publicIP
+//     nsg
+//   ]
+// }
 
 // module vnet 'core/network/vnet.bicep' = {
 //   name: 'vnet'
@@ -378,24 +382,24 @@ module privateEndpointSubnet 'core/network/subnet.bicep' = {
   ]
 }
 
-module vmSubnet 'core/network/subnet.bicep' = {
-  name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
-  scope: resourceGroup
-  params: {
-    existVnetName: vnet.outputs.name
-    name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
-    addressPrefix: subnetAddressPrefix2
-    networkSecurityGroup: {
-      id: nsg.outputs.id
-    }
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    vnet
-    nsg
-    privateEndpointSubnet
-  ]
-}
+// module vmSubnet 'core/network/subnet.bicep' = {
+//   name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
+//   scope: resourceGroup
+//   params: {
+//     existVnetName: vnet.outputs.name
+//     name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
+//     addressPrefix: subnetAddressPrefix2
+//     networkSecurityGroup: {
+//       id: nsg.outputs.id
+//     }
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     vnet
+//     nsg
+//     privateEndpointSubnet
+//   ]
+// }
 
 module appServiceSubnet 'core/network/subnet.bicep' = {
   name: '${abbrs.networkVirtualNetworksSubnets}${abbrs.webSitesAppService}${resourceToken}'
@@ -420,7 +424,7 @@ module appServiceSubnet 'core/network/subnet.bicep' = {
   dependsOn: [
     vnet
     nsg
-    vmSubnet
+    // vmSubnet
   ]
 }
 
