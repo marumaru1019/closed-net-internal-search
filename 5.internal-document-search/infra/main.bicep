@@ -82,10 +82,14 @@ var resourceToken = toLower(uniqueString(subscription().id, environmentName, loc
 var tags = { 'azd-env-name': environmentName }
 
 // Organize resources in a resource group
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
-  location: location
-  tags: tags
+// resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
+//   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
+//   location: location
+//   tags: tags
+// }
+
+resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
+  name: resourceGroupName
 }
 
 resource openAiResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (!empty(openAiResourceGroupName)) {
