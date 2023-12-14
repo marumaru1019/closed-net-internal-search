@@ -70,6 +70,8 @@ param privateEndpointLocation string = location
 // @secure()
 // param vmLoginPassword string
 
+param resourceName string = ''
+
 
 @description('Id of the user or app to assign application roles')
 param principalId string = ''
@@ -78,7 +80,11 @@ param principalId string = ''
 param useApplicationInsights bool = true
 
 var abbrs = loadJsonContent('abbreviations.json')
-var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
+// resourceToken が渡されてなければ subscriptionId から生成する
+var resourceToken = !empty(resourceName) ? resourceName : toLower(uniqueString(subscription().id, environmentName, location))
+
+
+// var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
 
 // Organize resources in a resource group
@@ -443,6 +449,7 @@ module appServicePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'azurewebsites.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.10']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -458,9 +465,12 @@ module cosmosDBPrivateEndpoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: cosmosDb.outputs.id
     privateLinkServiceGroupIds: ['SQL']
+    memberNames: [cosmosDb.outputs.name, '${cosmosDb.outputs.name}-japaneast']
+    // memberName: 'cosmos-eisai-sample3-dev'
     dnsZoneName: 'documents.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.8', '10.0.0.9']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -476,9 +486,11 @@ module oepnaiPrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: openAi.outputs.id
     privateLinkServiceGroupIds: ['account']
+    memberNames: ['default']
     dnsZoneName: 'openai.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.6']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -494,9 +506,11 @@ module formRecognizerPrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: formRecognizer.outputs.id
     privateLinkServiceGroupIds: ['account']
+    memberNames: ['default']
     dnsZoneName: 'cognitiveservices.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.7']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -516,6 +530,7 @@ module storagePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'blob.core.windows.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.4']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -534,6 +549,7 @@ module searchServicePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'search.windows.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.5']
   }
   dependsOn: [
     privateEndpointSubnet

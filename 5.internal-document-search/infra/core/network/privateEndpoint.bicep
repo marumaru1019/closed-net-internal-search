@@ -6,6 +6,8 @@ param subnetId string
 param privateLinkServiceId string
 param privateLinkServiceGroupIds array
 param isPrivateNetworkEnabled bool
+param privateIPAddress array
+param memberNames array = []
 
 resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = if (isPrivateNetworkEnabled) {
   name: 'privatelink.${dnsZoneName}'
@@ -32,6 +34,25 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-02-01' = if (i
     subnet: {
       id: subnetId
     }
+    customNetworkInterfaceName: '${name}-nic'
+    ipConfigurations: [for (pip, i) in privateIPAddress : {
+      name: '${name}-ipconfig${i+1}'
+      properties: {
+        privateIPAddress: pip
+        groupId: privateLinkServiceGroupIds[0]
+        memberName: memberNames != [] ? memberNames[i] : privateLinkServiceGroupIds[0]
+      }
+    }]
+    // [
+    //   {
+    //     name: name
+    //     properties: {
+    //       groupId: privateLinkServiceGroupIds[0]
+    //       memberName: memberName != '' ? memberName : privateLinkServiceGroupIds[0]
+    //       privateIPAddress: privateIPAddress
+    //     }
+    //   }
+    // ]
     privateLinkServiceConnections: [
       {
         name: '${name}-connection}'
