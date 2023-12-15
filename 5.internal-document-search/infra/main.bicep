@@ -56,19 +56,21 @@ param cosmosDbDatabaseName string = 'ChatHistory'
 param cosmosDbContainerName string = 'Prompts'
 
 
-
-param vnetLocation string = location
-param vnetAddressPrefix string = '10.0.0.0/16'
+param virtualNetworkName string = 'vnet'
+// param vnetLocation string = location
+// param vnetAddressPrefix string = '10.0.0.0/16'
 
 param subnetAddressPrefix1 string = '10.0.0.0/24'
-param subnetAddressPrefix2 string = '10.0.1.0/24'
+// param subnetAddressPrefix2 string = '10.0.1.0/24'
 param subnetAddressPrefix3 string = '10.0.2.0/24'
 
 param privateEndpointLocation string = location
 
-param vmLoginName string = 'azureuser'
-@secure()
-param vmLoginPassword string
+// param vmLoginName string = 'azureuser'
+// @secure()
+// param vmLoginPassword string
+
+param resourceName string = ''
 
 
 @description('Id of the user or app to assign application roles')
@@ -78,14 +80,22 @@ param principalId string = ''
 param useApplicationInsights bool = true
 
 var abbrs = loadJsonContent('abbreviations.json')
-var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
+// resourceToken が渡されてなければ subscriptionId から生成する
+var resourceToken = !empty(resourceName) ? resourceName : toLower(uniqueString(subscription().id, environmentName, location))
+
+
+// var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
 
 // Organize resources in a resource group
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
-  location: location
-  tags: tags
+// resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
+//   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
+//   location: location
+//   tags: tags
+// }
+
+resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = {
+  name: resourceGroupName
 }
 
 resource openAiResourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (!empty(openAiResourceGroupName)) {
@@ -160,6 +170,7 @@ module backend 'core/host/appservice.bicep' = {
     managedIdentity: true
     applicationInsightsName: useApplicationInsights ? monitoring.outputs.applicationInsightsName : ''
     virtualNetworkSubnetId: isPrivateNetworkEnabled ? appServiceSubnet.outputs.id : ''
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     appSettings: {
       APPLICATIONINSIGHTS_CONNECTION_STRING: useApplicationInsights ? monitoring.outputs.applicationInsightsConnectionString : ''
       AZURE_STORAGE_ACCOUNT: storage.outputs.name
@@ -199,7 +210,7 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         }
         sku: {
           name: 'Standard'
-          capacity: 120
+          capacity: 20
         }
       }
       {
@@ -211,7 +222,7 @@ module openAi 'core/ai/cognitiveservices.bicep' = {
         }
         sku: {
           name: 'Standard'
-          capacity: 120
+          capacity: 20
         }
       }
     ]
@@ -226,6 +237,7 @@ module formRecognizer 'core/ai/cognitiveservices.bicep' = {
     name: !empty(formRecognizerServiceName) ? formRecognizerServiceName : '${abbrs.cognitiveServicesFormRecognizer}${resourceToken}'
     kind: 'FormRecognizer'
     location: formRecognizerResourceGroupLocation
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     tags: tags
     sku: {
       name: formRecognizerSkuName
@@ -240,6 +252,7 @@ module searchService 'core/search/search-services.bicep' = {
     name: !empty(searchServiceName) ? searchServiceName : 'gptkb-${resourceToken}'
     location: searchServiceResourceGroupLocation
     tags: tags
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
     authOptions: {
       aadOrApiKey: {
         aadAuthFailureMode: 'http401WithBearerChallenge'
@@ -272,41 +285,42 @@ module storage 'core/storage/storage-account.bicep' = {
         publicAccess: 'None'
       }
     ]
-    publicNetworkAccess: 'Enabled'
+    // publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: isPrivateNetworkEnabled ? 'Disabled' : 'Enabled'
   }
 }
 
 // ================================================================================================
 // PRIVATE NETWORK VM
 // ================================================================================================
-module vm 'core/vm/vm.bicep' = {
-  name: 'vm${resourceToken}'
-  scope: resourceGroup
-  params: {
-    name: 'vm${resourceToken}'
-    location: location
-    adminUsername: vmLoginName
-    adminPasswordOrKey: vmLoginPassword
-    nicId: nic.outputs.nicId
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    nic
-  ]
-}
+// module vm 'core/vm/vm.bicep' = {
+//   name: 'vm${resourceToken}'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vm${resourceToken}'
+//     location: location
+//     adminUsername: vmLoginName
+//     adminPasswordOrKey: vmLoginPassword
+//     nicId: nic.outputs.nicId
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     nic
+//   ]
+// }
 
 // ================================================================================================
 // NETWORK
 // ================================================================================================
-module publicIP 'core/network/pip.bicep' = {
-  name: 'publicIP'
-  scope: resourceGroup
-  params: {
-    name: 'publicIP'
-    location: location
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-}
+// module publicIP 'core/network/pip.bicep' = {
+//   name: 'publicIP'
+//   scope: resourceGroup
+//   params: {
+//     name: 'publicIP'
+//     location: location
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+// }
 
 module nsg 'core/network/nsg.bicep' = {
   name: 'nsg'
@@ -318,31 +332,40 @@ module nsg 'core/network/nsg.bicep' = {
   }
 }
 
-module nic 'core/network/nic.bicep' = {
-  name: 'vm-nic'
-  scope: resourceGroup
-  params: {
-    name: 'vm-nic'
-    location: location
-    subnetId: vmSubnet.outputs.id
-    publicIPId: publicIP.outputs.publicIPId
-    nsgId: nsg.outputs.id
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    vmSubnet
-    publicIP
-    nsg
-  ]
-}
+// module nic 'core/network/nic.bicep' = {
+//   name: 'vm-nic'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vm-nic'
+//     location: location
+//     subnetId: vmSubnet.outputs.id
+//     publicIPId: publicIP.outputs.publicIPId
+//     nsgId: nsg.outputs.id
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     vmSubnet
+//     publicIP
+//     nsg
+//   ]
+// }
+
+// module vnet 'core/network/vnet.bicep' = {
+//   name: 'vnet'
+//   scope: resourceGroup
+//   params: {
+//     name: 'vnet'
+//     location: vnetLocation
+//     addressPrefixes: [vnetAddressPrefix]
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+// }
 
 module vnet 'core/network/vnet.bicep' = {
-  name: 'vnet'
+  name: virtualNetworkName
   scope: resourceGroup
   params: {
-    name: 'vnet'
-    location: vnetLocation
-    addressPrefixes: [vnetAddressPrefix]
+    name: virtualNetworkName
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
   }
 }
@@ -365,24 +388,24 @@ module privateEndpointSubnet 'core/network/subnet.bicep' = {
   ]
 }
 
-module vmSubnet 'core/network/subnet.bicep' = {
-  name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
-  scope: resourceGroup
-  params: {
-    existVnetName: vnet.outputs.name
-    name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
-    addressPrefix: subnetAddressPrefix2
-    networkSecurityGroup: {
-      id: nsg.outputs.id
-    }
-    isPrivateNetworkEnabled: isPrivateNetworkEnabled
-  }
-  dependsOn: [
-    vnet
-    nsg
-    privateEndpointSubnet
-  ]
-}
+// module vmSubnet 'core/network/subnet.bicep' = {
+//   name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
+//   scope: resourceGroup
+//   params: {
+//     existVnetName: vnet.outputs.name
+//     name: '${abbrs.networkVirtualNetworksSubnets}vm-${resourceToken}'
+//     addressPrefix: subnetAddressPrefix2
+//     networkSecurityGroup: {
+//       id: nsg.outputs.id
+//     }
+//     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+//   }
+//   dependsOn: [
+//     vnet
+//     nsg
+//     privateEndpointSubnet
+//   ]
+// }
 
 module appServiceSubnet 'core/network/subnet.bicep' = {
   name: '${abbrs.networkVirtualNetworksSubnets}${abbrs.webSitesAppService}${resourceToken}'
@@ -407,7 +430,7 @@ module appServiceSubnet 'core/network/subnet.bicep' = {
   dependsOn: [
     vnet
     nsg
-    vmSubnet
+    // vmSubnet
   ]
 }
 
@@ -426,6 +449,7 @@ module appServicePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'azurewebsites.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.10']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -441,9 +465,12 @@ module cosmosDBPrivateEndpoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: cosmosDb.outputs.id
     privateLinkServiceGroupIds: ['SQL']
+    memberNames: [cosmosDb.outputs.name, '${cosmosDb.outputs.name}-${privateEndpointLocation}']
+    // memberName: 'cosmos-eisai-sample3-dev'
     dnsZoneName: 'documents.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.8', '10.0.0.9']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -459,9 +486,11 @@ module oepnaiPrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: openAi.outputs.id
     privateLinkServiceGroupIds: ['account']
+    memberNames: ['default']
     dnsZoneName: 'openai.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.6']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -477,9 +506,11 @@ module formRecognizerPrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: formRecognizer.outputs.id
     privateLinkServiceGroupIds: ['account']
+    memberNames: ['default']
     dnsZoneName: 'cognitiveservices.azure.com'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.7']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -499,6 +530,7 @@ module storagePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'blob.core.windows.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.4']
   }
   dependsOn: [
     privateEndpointSubnet
@@ -517,6 +549,7 @@ module searchServicePrivateEndopoint 'core/network/privateEndpoint.bicep' = {
     dnsZoneName: 'search.windows.net'
     linkVnetId: vnet.outputs.id
     isPrivateNetworkEnabled: isPrivateNetworkEnabled
+    privateIPAddress: ['10.0.0.5']
   }
   dependsOn: [
     privateEndpointSubnet
