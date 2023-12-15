@@ -465,7 +465,7 @@ module cosmosDBPrivateEndpoint 'core/network/privateEndpoint.bicep' = {
     subnetId: privateEndpointSubnet.outputs.id
     privateLinkServiceId: cosmosDb.outputs.id
     privateLinkServiceGroupIds: ['SQL']
-    memberNames: [cosmosDb.outputs.name, '${cosmosDb.outputs.name}-japaneast']
+    memberNames: [cosmosDb.outputs.name, '${cosmosDb.outputs.name}-${privateEndpointLocation}']
     // memberName: 'cosmos-eisai-sample3-dev'
     dnsZoneName: 'documents.azure.com'
     linkVnetId: vnet.outputs.id
